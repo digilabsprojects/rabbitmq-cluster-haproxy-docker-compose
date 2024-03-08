@@ -6,6 +6,12 @@ x-rabbitmq-service: &rabbitmq-service
     context: .
     dockerfile: .docker/rabbitmq/Dockerfile
   restart: always
+  healthcheck:
+    test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+    interval: 10s
+    timeout: 10s
+    retries: 3
+    start_period: 30s
   networks:
     - rabbitmq_cluster
 

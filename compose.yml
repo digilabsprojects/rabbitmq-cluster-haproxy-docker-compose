@@ -1,0 +1,80 @@
+version: '3.9'
+
+x-rabbitmq-service: &rabbitmq-service
+  image: digilabs/rabbitmq:3.13.0-management
+  build:
+    context: .
+    dockerfile: .docker/rabbitmq/Dockerfile
+  restart: always
+  networks:
+    - rabbitmq_cluster
+
+x-rabbitmq-enviroment: &rabbitmq-enviroment
+  RABBITMQ_ERLANG_COOKIE: '${RABBITMQ_ERLANG_COOKIE:-UWKAHROIHXIFKGFXFZET}'
+
+x-rabbitmq-slave-enviroment: &rabbitmq-slave-enviroment
+  <<: *rabbitmq-enviroment
+  RABBITMQ_CLUSTER_WITH: 'rabbitmq-master'
+
+services:
+  haproxy:
+    image: haproxy:2.9.6
+    container_name: haproxy
+    restart: always
+    volumes:
+      - .docker/haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    depends_on:
+      - rabbitmq-master
+      - rabbitmq-slave1
+      - rabbitmq-slave2
+    ports:
+      - 15672:15672
+      - 5672:5672
+    networks:
+      - rabbitmq_cluster
+
+  rabbitmq-master:
+    <<: *rabbitmq-service
+    container_name: rabbitmq-master
+    hostname: rabbitmq-master
+    environment:
+      <<: *rabbitmq-enviroment
+      RABBITMQ_DEFAULT_USER: '${RABBITMQ_DEFAULT_USER:-digilabs}'
+      RABBITMQ_DEFAULT_PASS: '${RABBITMQ_DEFAULT_PASS:-digilabs}'
+    volumes:
+      - rabbitmq_master_data:/var/lib/rabbitmq/
+
+  rabbitmq-slave1:
+    <<: *rabbitmq-service
+    container_name: rabbitmq-slave1
+    hostname: rabbitmq-slave1
+    environment:
+      <<: *rabbitmq-slave-enviroment
+    links:
+      - rabbitmq-master
+    depends_on:
+      - rabbitmq-master
+    volumes:
+      - rabbitmq_slave1_data:/var/lib/rabbitmq/
+
+  rabbitmq-slave2:
+    <<: *rabbitmq-service
+    container_name: rabbitmq-slave2
+    hostname: rabbitmq-slave2
+    environment:
+      <<: *rabbitmq-slave-enviroment
+    links:
+      - rabbitmq-master
+    depends_on:
+      - rabbitmq-master
+    volumes:
+      - rabbitmq_slave2_data:/var/lib/rabbitmq/
+
+volumes:
+  rabbitmq_master_data:
+  rabbitmq_slave1_data:
+  rabbitmq_slave2_data:
+
+networks:
+  rabbitmq_cluster:
+    driver: bridge
